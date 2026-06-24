@@ -1,0 +1,36 @@
+flowchart LR
+    Client[Client Request<br/>POST /users or PUT /users/:id] --> Router[HTTP Router / Handler]
+    Router --> Validator[Request Validation]
+    Validator --> Service[User Service]
+
+    Service --> Cache[Cache Layer<br/>optional read-through cache]
+    Service --> Repo[Repository Interface]
+    Repo --> DB[(Database Layer)]
+    DB --> PG[(PostgreSQL)]
+
+    Service --> Publisher[Event Publisher Interface]
+    Publisher --> MQ[(Message Queue<br/>RabbitMQ / broker abstraction)]
+    MQ --> Notifier[Notification Service]
+    Notifier --> Notify[Send Notification<br/>welcome email / update alert]
+
+    subgraph Observability[Observability]
+        Logger[Structured Logging]
+        Metrics[Metrics + Health Checks]
+    end
+
+    Service --> Logger
+    Service --> Metrics
+
+    DB -. persisted data .-> DataModel[User record<br/>id, email, name, status, created_at, updated_at]
+    MQ -. async event .-> EventMsg[Event payload<br/>user.created / user.updated<br/>user_id, email, event_type]
+
+    subgraph RequestData[Request Data]
+        ReqData[Create / Update payload<br/>name, email, status]
+    end
+
+    Validator --> ReqData
+    ReqData --> Service
+
+    PG -->|response| Service
+    Notifier -->|async side effect| Service
+    Service -->|response| Client
