@@ -1,20 +1,20 @@
 package tests
 
 import (
-	"bytes"
-	"log/slog"
 	"testing"
 	"time"
 
 	"github.com/sumithsudesan/notification-service/src/notification"
+	"github.com/sumithsudesan/pkg/logger"
 )
 
-// newTestLogger creates a new logger instance for testing purposes.
-func newTestLogger() *slog.Logger {
-	return slog.New(slog.NewJSONHandler(bytes.NewBuffer(nil), nil))
+// test lohher instance
+func newTestLogger() logger.Logger {
+	log, _ := logger.New("error")
+	return log
 }
 
-// TestHandleEvent_ValidPayload tests the HandleEvent function with a valid JSON payload.
+// Test cases for HandleEvent function
 func TestHandleEvent_ValidPayload(t *testing.T) {
 	body := []byte(`{
 		"user_id": "user-123",
@@ -28,19 +28,21 @@ func TestHandleEvent_ValidPayload(t *testing.T) {
 	}
 }
 
-// TestHandleEvent_InvalidJSON tests the HandleEvent function with invalid JSON input.
+// Test cases for HandleEvent function with edge cases
 func TestHandleEvent_InvalidJSON(t *testing.T) {
 	if err := notification.HandleEvent([]byte(`not-json`), newTestLogger()); err == nil {
 		t.Fatal("expected error for invalid JSON, got nil")
 	}
 }
 
+// Test cases for HandleEvent function with edge cases
 func TestHandleEvent_EmptyBody(t *testing.T) {
 	if err := notification.HandleEvent([]byte(`{}`), newTestLogger()); err != nil {
 		t.Fatalf("empty payload should parse without error, got: %v", err)
 	}
 }
 
+// Test cases for HandleEvent function with edge cases
 func TestHandleEvent_AllEventTypes(t *testing.T) {
 	types := []string{"user.created", "user.updated", "user.deleted"}
 	log := newTestLogger()

@@ -3,11 +3,12 @@ package notification
 import (
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"time"
+
+	"github.com/sumithsudesan/pkg/logger"
 )
 
-// Represents the structure of the incoming event data.
+// Represents the structure of the user event received from the queue.
 type Event struct {
 	UserID    string    `json:"user_id"`
 	Email     string    `json:"email"`
@@ -15,17 +16,13 @@ type Event struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
-// HandleEvent processes the incoming event data,
-// logs the event details, and returns an error
-// if the event cannot be parsed.
-func HandleEvent(body []byte, log *slog.Logger) error {
+// new Event instnace
+func HandleEvent(body []byte, log logger.Logger) error {
 	var event Event
-	// unmarshal the JSON into the Event struct.
 	if err := json.Unmarshal(body, &event); err != nil {
 		return fmt.Errorf("failed to parse event: %w", err)
 	}
 
-	// Log the event details using structured logging.
 	log.Info("received user event",
 		"service", "notification-service",
 		"event_type", event.EventType,

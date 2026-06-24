@@ -1,0 +1,29 @@
+service:
+  name: notification-service
+  port: 0
+  env: development
+
+log:
+  level: info
+
+queue:
+  provider: rabbitmq
+  host: localhost
+  port: 5672
+  user: guest
+  password: ""          # override via QUEUE_PASSWORD env var
+  exchange:
+    name: user.events
+    type: topic
+    durable: true
+  queue:
+    name: notification.user.events
+    routing_key: "user.*"
+    durable: true
+  retry:
+    max_attempts: 3
+    interval: 5
+  dlq:
+    enabled: false
+    exchange: ""
+    queue: ""
