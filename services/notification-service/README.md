@@ -1,18 +1,13 @@
-# Notification Service
+# notification-service
 
-The notification service is an event-driven consumer that listens for user domain events
-published by the user service via RabbitMQ. Its responsibility is to react to those events
-and trigger downstream actions — currently structured JSON logging, with email/SMS delivery
-planned in a later phase.
+Event-driven consumer that listens for user domain events from RabbitMQ and triggers downstream actions. Currently logs each event as structured JSON. Email / SMS delivery is planned for a later phase.
 
 ## Responsibilities
 
 - Consume user events from RabbitMQ (`user.created`, `user.updated`, `user.deleted`)
 - Parse and validate the event payload
-- Log each event as structured JSON
+- Log each event as structured JSON via `pkg/logger`
 - Acknowledge processed messages; negative-acknowledge unparseable ones
-
----
 
 ## Architecture
 
@@ -24,49 +19,18 @@ RabbitMQ Exchange (user.events — topic, durable)
 Queue (notification.user.events — durable)
           │
           ▼
-    Consumer.Start()
+  pkg/queue.Consumer.Consume()
           │
           ▼
-    HandleEvent()
+     HandleEvent()
           │
      ┌────┴─────┐
-     │  success  │  → msg.Ack()  → structured JSON log
-     │  failure  │  → msg.Nack() → dead-letter (future)
+     │  success  │  → msg.Ack()   → structured JSON log
+     │  failure  │  → msg.Nack()  → dead-letter (planned)
      └───────────┘
 ```
 
----
-
-## Event Payload
-
-Events published by the user service follow this format:
-
-```json
-{
-  "user_id": "user-20260624120000.000000000",
-  "email": "user@example.com",
-  "event_type": "user.created",
-  "timestamp": "2026-06-24T10:00:00Z"
-}
-```
-
-Supported event types:
-
-| Event type       | Trigger                    |
-|------------------|----------------------------|
-| `user.created`   | New user registered        |
-| `user.updated`   | User profile updated       |
-| `user.deleted`   | User account deleted       |
-
----
-
-## Configuration
-
-| Environment Variable | Default                                | Description             |
-|----------------------|----------------------------------------|-------------------------|
-| `AMQP_URL`           | `amqp://guest:guest@localhost:5672/`   | RabbitMQ connection URL |
-
----
+The service depends on `pkg/queue.Consumer` for all broker communication. No raw AMQP code lives in this service — swapping RabbitMQ for Kafka requires no changes here.
 
 ## Project Structure
 
@@ -76,15 +40,61 @@ notification-service/
 │   └── main.go                  Entry point — wires consumer, handles graceful shutdown
 ├── src/
 │   └── notification/
-│       ├── consumer.go          RabbitMQ connection, exchange/queue setup, consume loop
 │       └── handler.go           Event parsing and structured JSON logging
 ├── tests/
 │   └── handler_test.go          Unit tests for event handler
-└── docker/
-    └── Dockerfile               Multi-stage Docker build
+├── docker/
+│   └── Dockerfile               Multi-stage Docker build (scratch final image)
+├── config.yaml                  Service configuration
+├── go.mod                       Module definition
+└── Makefile                     Build and run targets
 ```
 
----
+## Event Payload
+
+```json
+{
+  "user_id": "user-20260624120000.000000000",
+  "email": "alice@example.com",
+  "event_type": "user.created",
+  "timestamp": "2026-06-24T12:00:00Z"
+}
+```
+
+| Event type | Trigger |
+|---|---|
+| `user.created` | New user registered |
+| `user.updated` | User profile updated |
+| `user.deleted` | User account deleted |
+
+## Configuration
+
+Loaded from `config.yaml`. Sensitive values override via environment variables.
+
+```yaml
+service:
+  name: notification-service
+  port: 0
+  env: development
+
+log:
+  level: info
+
+queue:
+  provider: rabbitmq
+  host: localhost
+  port: 5672
+  user: guest
+  password: ""       # override: QUEUE_PASSWORD
+  exchange:
+    name: user.events
+    type: topic
+    durable: true
+  queue:
+    name: notification.user.events
+    routing_key: "user.*"
+    durable: true
+```
 
 ## Running Locally
 
@@ -92,70 +102,53 @@ Requires RabbitMQ running on `localhost:5672`.
 
 ```bash
 cd services/notification-service
-go run ./cmd/main.go
+make run
+# or
+go run ./cmd
 ```
-
-Override the RabbitMQ URL:
-
-```bash
-AMQP_URL=amqp://user:pass@localhost:5672/ go run ./cmd/main.go
-```
-
-Or via the Makefile from the repo root:
-
-```bash
-make run-notification
-```
-
----
 
 ## Running Tests
 
 ```bash
-make test-notification
-```
-
-Or directly:
-
-```bash
-cd services/notification-service
-go test -vet=off ./tests/...
+make test
+# or
+go test ./...
 ```
 
 Tests cover:
 
-| Test                              | What it verifies                            |
-|-----------------------------------|---------------------------------------------|
-| `TestHandleEvent_ValidPayload`    | Full valid payload is parsed and logged     |
-| `TestHandleEvent_InvalidJSON`     | Malformed JSON returns an error             |
-| `TestHandleEvent_EmptyBody`       | Empty JSON object parses without error      |
-| `TestHandleEvent_AllEventTypes`   | All three event types are handled correctly |
-
----
+| Test | What it verifies |
+|---|---|
+| `TestHandleEvent_ValidPayload` | Full valid payload is parsed and logged |
+| `TestHandleEvent_InvalidJSON` | Malformed JSON returns an error |
+| `TestHandleEvent_EmptyBody` | Empty JSON object parses without error |
+| `TestHandleEvent_AllEventTypes` | All three event types are handled correctly |
 
 ## Docker
 
-Build the image:
+Build context is `services/` to include the shared `pkg` module via the Go workspace:
 
 ```bash
-make build-notification
+make docker-build        # builds image: notification-service:latest
+make docker-run          # runs the container
 ```
 
-Build with a specific tag and registry (for CI):
+Or manually from `services/`:
 
 ```bash
-make build-notification TAG=abc1234 REGISTRY=ghcr.io/sumithsudesan
+docker build -t notification-service:latest -f notification-service/docker/Dockerfile .
 ```
 
-Start all services via docker compose:
+## Makefile Targets
 
-```bash
-make up          # starts RabbitMQ + notification-service
-make logs        # tail notification-service output
-make down        # stop everything
-```
-
----
+| Target | Description |
+|---|---|
+| `make build` | Compile the service |
+| `make test` | Run all tests |
+| `make run` | Run locally |
+| `make docker-build` | Build Docker image |
+| `make docker-run` | Run Docker container |
+| `make clean` | Clean build artefacts |
 
 ## Publishing a Test Event
 
@@ -175,7 +168,7 @@ Once running, open the RabbitMQ management UI at `http://localhost:15672` (guest
 }
 ```
 
-Expected log output from the notification service:
+Expected log output:
 
 ```json
 {
@@ -185,29 +178,22 @@ Expected log output from the notification service:
   "service": "notification-service",
   "event_type": "user.created",
   "user_id": "user-001",
-  "email": "test@example.com",
-  "timestamp": "2026-06-24T10:00:00Z"
+  "email": "test@example.com"
 }
 ```
 
----
-
 ## Dependencies
 
-| Package                      | Purpose               |
-|------------------------------|-----------------------|
-| `rabbitmq/amqp091-go v1.10` | RabbitMQ AMQP client  |
-
----
+| Package | Purpose |
+|---|---|
+| `pkg/config` | YAML + env var configuration |
+| `pkg/logger` | Structured JSON logger (zap) |
+| `pkg/queue` | RabbitMQ consumer abstraction |
 
 ## Current Limitations
 
-This is the Phase 1 implementation. The following are planned for later phases:
-
-| Limitation                            | Planned replacement                        |
-|---------------------------------------|--------------------------------------------|
-| AMQP URL read from env var only       | `pkg/config` — YAML + env var override     |
-| `log/slog` stdlib logger              | `pkg/logger` — zap structured JSON logger  |
-| Logs only, no real notifications      | Email / SMS / webhook delivery             |
-| No retry on failed messages           | Dead-letter queue + retry policy           |
-| No connection reconnect on failure    | Reconnect with exponential backoff         |
+| Limitation | Planned replacement |
+|---|---|
+| Logs only, no real notifications | Email / SMS / webhook delivery |
+| No retry on failed messages | Dead-letter queue + retry policy |
+| No reconnect on broker failure | Reconnect with exponential backoff |

@@ -1,13 +1,13 @@
-# User Service
+# user-service
 
-The user service is the core domain service of the Cloud-Native User Platform. It provides a REST API for managing user lifecycle operations and is designed around clean architecture principles — business logic is decoupled from infrastructure concerns via interface-driven design.
+REST API for user lifecycle management. Core domain service of the Cloud-Native User Platform.
 
 ## Responsibilities
 
-- Create, read, update, and delete users
+- Create, read, update, and delete users via HTTP
 - Enforce domain validation rules
-- Expose structured error responses
-- Support optimistic concurrency control via versioning
+- Publish domain events (`user.created`, `user.updated`, `user.deleted`) to RabbitMQ
+- Optimistic concurrency control via version field
 
 ## Architecture
 
@@ -18,25 +18,29 @@ HTTP Request
 Router (chi)
     │
     ▼
-Handler (HTTP layer — request parsing, response serialisation)
+Handler  ── request parsing, response serialisation
     │
     ▼
-Service (domain logic — validation, business rules)
+Service  ── domain logic, validation, business rules
+    │              │
+    │              └──── Publisher Interface ──── RabbitMQ (pkg/queue)
+    ▼
+Repository Interface
     │
     ▼
-Storage (in-memory map — temporary, pending PostgreSQL)
+PostgreSQL (pkg/database)
 ```
 
-The handler layer never contains business logic. The service layer never contains HTTP concerns. This separation makes each layer independently testable and replaceable.
+Business logic never depends on infrastructure implementations. All external concerns (database, queue, config, logger) are injected as interfaces from `pkg`.
 
 ## Domain Model
 
 ```text
 User
-├── id          string     Unique identifier
+├── id          string     Unique identifier (user-<timestamp>)
 ├── name        string     Display name
 ├── email       string     Contact email
-├── status      string     Account status (e.g. active, inactive)
+├── status      string     Account status (active / inactive)
 ├── created_at  time.Time  UTC creation timestamp
 ├── updated_at  time.Time  UTC last-modified timestamp
 └── version     int        Optimistic concurrency version
@@ -44,27 +48,24 @@ User
 
 ## API
 
-| Method | Path          | Description         |
-|--------|---------------|---------------------|
-| GET    | /health       | Liveness check      |
-| POST   | /users        | Create a user       |
-| GET    | /users        | List all users      |
-| GET    | /users/{id}   | Get a user by ID    |
-| PUT    | /users/{id}   | Update a user       |
-| DELETE | /users/{id}   | Delete a user       |
+| Method | Path | Description |
+|---|---|---|
+| GET | /health | Liveness check |
+| POST | /users | Create a user |
+| GET | /users | List all users |
+| GET | /users/{id} | Get a user by ID |
+| PUT | /users/{id} | Update a user |
+| DELETE | /users/{id} | Delete a user |
 
 ### Create User
 
 ```
 POST /users
-```
+Content-Type: application/json
 
-Request:
-
-```json
 {
-  "name": "test user",
-  "email": "test user.2026@gmail.com",
+  "name": "Alice",
+  "email": "alice@example.com",
   "status": "active"
 }
 ```
@@ -74,8 +75,8 @@ Response `201 Created`:
 ```json
 {
   "id": "user-20260624120000.000000000",
-  "name": "test user",
-  "email": "test user.2026@gmail.com",
+  "name": "Alice",
+  "email": "alice@example.com",
   "status": "active",
   "created_at": "2026-06-24T12:00:00Z",
   "updated_at": "2026-06-24T12:00:00Z",
@@ -85,48 +86,79 @@ Response `201 Created`:
 
 ### Update User
 
-Update uses optimistic concurrency control. The `version` field in the request must match the current version of the record. If it does not match, the request is rejected with `409 Conflict`.
+Requires the current `version` value. Returns `409 Conflict` on mismatch.
 
 ```
 PUT /users/{id}
-```
+Content-Type: application/json
 
-Request:
-
-```json
 {
-  "name": "test user",
-  "email": "test user.2026@gmail.com",
+  "name": "Alice Updated",
+  "email": "alice@example.com",
   "status": "inactive",
   "version": 1
 }
 ```
 
-Response `200 OK`: returns the updated user with `version` incremented.
+Response `200 OK` — returns the updated user with `version` incremented.
 
 ### Error Responses
 
-All errors return a JSON body:
-
 ```json
-{
-  "error": "user not found"
-}
+{ "error": "user not found" }
 ```
 
-| Status | Condition                        |
-|--------|----------------------------------|
-| 400    | Missing required fields          |
-| 400    | Malformed request body           |
-| 404    | User ID does not exist           |
-| 409    | Version mismatch on update       |
-| 500    | Internal server error            |
+| Status | Condition |
+|---|---|
+| 400 | Missing required fields or malformed body |
+| 404 | User does not exist |
+| 409 | Version mismatch on update |
+| 500 | Internal server error |
+
+## Configuration
+
+Loaded from `config.yaml`. Sensitive values override via environment variables.
+
+```yaml
+service:
+  name: user-service
+  port: 8080
+  env: development
+
+log:
+  level: info
+
+database:
+  provider: postgres
+  host: localhost
+  port: 5432
+  name: userdb
+  user: postgres
+  password: ""       # override: DATABASE_PASSWORD
+
+queue:
+  provider: rabbitmq
+  host: localhost
+  port: 5672
+  user: guest
+  password: ""       # override: QUEUE_PASSWORD
+  exchange:
+    name: user.events
+    type: topic
+    durable: true
+  queue:
+    name: user.events.main
+    routing_key: "user.*"
+    durable: true
+```
 
 ## Running Locally
 
 ```bash
 cd services/user-service
-go run ./cmd/main.go
+make run
+# or
+go run ./cmd
 ```
 
 Server starts on `:8080`.
@@ -134,23 +166,62 @@ Server starts on `:8080`.
 ## Running Tests
 
 ```bash
-cd services/user-service
-go test ./tests/...
+make test
+# or
+go test ./...
 ```
+
+## Docker
+
+Build context is `services/` to include the shared `pkg` module via the Go workspace:
+
+```bash
+make docker-build        # builds image: user-service:latest
+make docker-run          # runs on port 8080
+```
+
+Or manually from `services/`:
+
+```bash
+docker build -t user-service:latest -f user-service/docker/Dockerfile .
+```
+
+## Makefile Targets
+
+| Target | Description |
+|---|---|
+| `make build` | Compile the service |
+| `make test` | Run all tests |
+| `make run` | Run locally |
+| `make docker-build` | Build Docker image |
+| `make docker-run` | Run Docker container |
+| `make clean` | Clean build artefacts |
 
 ## Dependencies
 
-| Package            | Purpose          |
-|--------------------|------------------|
-| `go-chi/chi/v5`    | HTTP router      |
+| Package | Purpose |
+|---|---|
+| `pkg/config` | YAML + env var configuration |
+| `pkg/logger` | Structured JSON logger (zap) |
+| `pkg/database` | PostgreSQL abstraction (pgx) |
+| `pkg/queue` | RabbitMQ publisher abstraction |
+| `go-chi/chi` | HTTP router |
 
-## Current Limitations
+## Events Published
 
-This implementation uses an **in-memory map** for storage. Data is lost on restart. This is intentional as a temporary layer while the PostgreSQL repository is being built.
+| Event | Trigger |
+|---|---|
+| `user.created` | Successful user creation |
+| `user.updated` | Successful user update |
+| `user.deleted` | Successful user deletion |
 
-Planned replacements per the project roadmap:
+Event payload:
 
-- Storage: in-memory → PostgreSQL
-- Events: none → RabbitMQ publisher
-- Config: hardcoded port → YAML / environment variables
-- Logging: `log` → structured JSON logger
+```json
+{
+  "user_id": "user-20260624120000.000000000",
+  "email": "alice@example.com",
+  "event_type": "user.created",
+  "timestamp": "2026-06-24T12:00:00Z"
+}
+```
