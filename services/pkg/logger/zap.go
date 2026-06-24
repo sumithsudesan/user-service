@@ -59,5 +59,5 @@ func (l *zapLogger) Error(msg string, keysAndValues ...any) {
 
 // With returns a child logger with the given key-value fields pre-attached.
 func (l *zapLogger) With(keysAndValues ...any) Logger {
-	return &zapLogger{log: l.sugar.With(keysAndValues...)}
+	return &zapLogger{log: l.log.With(keysAndValues...)}
 }

@@ -100,8 +100,7 @@ type rabbitMQConsumer struct {
 
 // New RabitMQ consumer Instance
 func newRabbitMQConsumer(cfg config.QueueConfig,
-	log logger.Logger) 
-	(Consumer, error) {
+	log logger.Logger) (Consumer, error) {
 	// Connects to Rambimq
 	conn, ch, err := connectRabbitMQ(cfg)
 	if err != nil {
@@ -144,22 +143,21 @@ func newRabbitMQConsumer(cfg config.QueueConfig,
 	return &rabbitMQConsumer{conn: conn, channel: ch, cfg: cfg, log: log}, nil
 }
 
-
 // Consumes the messahe from QUEUE
 func (c *rabbitMQConsumer) Consume(ctx context.Context, handler HandlerFunc) error {
 	// Cosues
 	msgs, err := c.channel.Consume(c.cfg.Queue.Name,
-										"", 
-										false,
-										false, 
-										false, 
-										false,
-										nil)
+		"",
+		false,
+		false,
+		false,
+		false,
+		nil)
 	if err != nil {
 		return fmt.Errorf("failed to start consuming: %w", err)
 	}
 
-	// Wait for 
+	// Wait for
 	for {
 		select {
 		case <-ctx.Done():
@@ -199,16 +197,15 @@ func (c *rabbitMQConsumer) Close() error {
 // -- helpers functions --
 
 // Connect Message QUEUE
-func connectRabbitMQ(cfg config.QueueConfig) 
-					(*amqp.Connection, 
-					 *amqp.Channel,
-					 error) {
+func connectRabbitMQ(cfg config.QueueConfig) (*amqp.Connection,
+	*amqp.Channel,
+	error) {
 	// prepare connection url
-	url := fmt.Sprintf("amqp://%s:%s@%s:%d/", 
-						cfg.User, 
-							cfg.Password,
-								 cfg.Host, 
-								 	cfg.Port)
+	url := fmt.Sprintf("amqp://%s:%s@%s:%d/",
+		cfg.User,
+		cfg.Password,
+		cfg.Host,
+		cfg.Port)
 
 	// Connect MQ
 	conn, err := amqp.Dial(url)
@@ -228,7 +225,7 @@ func connectRabbitMQ(cfg config.QueueConfig)
 
 // Declare exchange
 func declareExchange(ch *amqp.Channel,
-					 cfg config.QueueConfig) error {
+	cfg config.QueueConfig) error {
 	return ch.ExchangeDeclare(
 		cfg.Exchange.Name,
 		cfg.Exchange.Type,
