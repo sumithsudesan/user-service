@@ -1,0 +1,45 @@
+service:
+  name: user-service
+  port: 8080
+  env: development
+
+log:
+  level: info
+
+database:
+  provider: postgres
+  host: localhost
+  port: 5432
+  name: userdb
+  user: postgres
+  password: ""          # override via DATABASE_PASSWORD env var
+  ssl_mode: disable
+  pool:
+    max_open: 25
+    max_idle: 5
+    max_lifetime: 300
+  timeout:
+    connect: 5
+    query: 30
+
+queue:
+  provider: rabbitmq
+  host: localhost
+  port: 5672
+  user: guest
+  password: ""          # override via QUEUE_PASSWORD env var
+  exchange:
+    name: user.events
+    type: topic
+    durable: true
+  queue:
+    name: user.events.main
+    routing_key: "user.*"
+    durable: true
+  retry:
+    max_attempts: 3
+    interval: 5
+  dlq:
+    enabled: true
+    exchange: user.events.dlx
+    queue: user.events.dlq

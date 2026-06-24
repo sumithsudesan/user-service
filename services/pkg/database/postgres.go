@@ -96,7 +96,7 @@ func (db *postgresDB) Query(ctx context.Context,
 
 	rows, err := db.pool.Query(ctx, query, args...)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, MapError(err)
 	}
 	return rows, nil
 }
@@ -113,7 +113,7 @@ func (db *postgresDB) Exec(ctx context.Context,
 	// Execute the query.
 	tag, err := db.pool.Exec(ctx, query, args...)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, MapError(err)
 	}
 	return tag, nil
 }
@@ -128,8 +128,8 @@ func (db *postgresDB) Close() error {
 	return nil
 }
 
-// mapError translates pgx-specific errors into package-level sentinel errors.
-func mapError(err error) error {
+// MapError translates pgx-specific errors into package-level sentinel errors.
+func MapError(err error) error {
 	if err == nil {
 		return nil
 	}

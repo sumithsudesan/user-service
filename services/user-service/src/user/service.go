@@ -1,49 +1,53 @@
 package user
 
 import (
-	"errors"
 	"time"
+
+	"github.com/sumithsudesan/pkg/logger"
 )
 
-// Errors that can be returned by the Service methods.
 var (
-	ErrNameRequired    = errors.New("name is required")  // errors for missing name
-	ErrEmailRequired   = errors.New("email is required") // errors for missing email
-	ErrUserNotFound    = errors.New("user not found")    // errors for user not found
-	ErrVersionMismatch = errors.New("version mismatch")  // errors for version mismatch
-	ErrInvalidRequest  = errors.New("invalid request")   // errors for invalid request
+	ErrNameRequired    = errorf("name is required")
+	ErrEmailRequired   = errorf("email is required")
+	ErrUserNotFound    = errorf("user not found")
+	ErrVersionMismatch = errorf("version mismatch")
+	ErrInvalidRequest  = errorf("invalid request")
 )
 
-// User struct represents a user in the system.
+type domainError string
+
+func (e domainError) Error() string { return string(e) }
+func errorf(s string) error         { return domainError(s) }
+
+// Service implements user domain business logic.
+// It depends only on the DB and Publisher interfaces —
 type Service struct {
-	users map[string]*User // users is a map that stores users by their ID.
+	repo Repository
+	pub  Publisher
+	log  logger.Logger
 }
 
-// new service creates a new instance of the Service.
-func NewService() *Service {
-	// Initialize the users map to store users by their ID.
-	return &Service{
-		users: make(map[string]*User),
-	}
+// Creates new instance of user service
+func NewService(repo Repository,
+	pub Publisher,
+	log logger.Logger) *Service {
+	return &Service{repo: repo,
+		pub: pub,
+		log: log}
 }
 
-// Create creates a new user with the provided input
-// and returns the created user.
+// Create creates a new user and publishes a "user.created" event.
 func (s *Service) Create(input CreateInput) (*User, error) {
-	// Check if the name is provided
 	if input.Name == "" {
 		return nil, ErrNameRequired
 	}
-	// Check if the email is provided
 	if input.Email == "" {
 		return nil, ErrEmailRequired
 	}
 
 	now := time.Now().UTC()
-
-	// Create a new user with a unique ID and the provided input.
 	u := &User{
-		ID:        "user-" + time.Now().Format("20060102150405.000000000"),
+		ID:        "user-" + now.Format("20060102150405.000000000"),
 		Name:      input.Name,
 		Email:     input.Email,
 		Status:    input.Status,
@@ -52,56 +56,84 @@ func (s *Service) Create(input CreateInput) (*User, error) {
 		Version:   1,
 	}
 
-	s.users[u.ID] = u
+	// create in DB
+	if err := s.repo.Create(u); err != nil {
+		return nil, err
+	}
+
+	// publish user crae event
+	_ = s.pub.Publish(Event{
+		UserID:    u.ID,
+		Email:     u.Email,
+		EventType: "user.created",
+		Timestamp: now,
+	})
+
+	s.log.Info("user created", "user_id", u.ID)
 	return u, nil
 }
 
-// Get retrieves a user by ID. If the user is not found,
-// it returns an error.
+// Used to get user
 func (s *Service) Get(id string) (*User, error) {
-	u, ok := s.users[id]
-	if !ok {
-		return nil, ErrUserNotFound
-	}
-	return u, nil
+	// Get user
+	return s.repo.Get(id)
 }
 
-// List returns all users in the service.
+// Used to,list user
 func (s *Service) List() ([]*User, error) {
-	users := make([]*User, 0, len(s.users))
-	for _, u := range s.users {
-		users = append(users, u)
-	}
-	return users, nil
+	return s.repo.List()
 }
 
-// Update updates an existing user with the provided input and
-// returns the updated user.
+// used to update user
 func (s *Service) Update(id string, input UpdateInput) (*User, error) {
-	u, ok := s.users[id]
-	if !ok {
-		return nil, ErrUserNotFound
+	u, err := s.repo.Get(id)
+	if err != nil {
+		return nil, err
 	}
 	if u.Version != input.Version {
 		return nil, ErrVersionMismatch
 	}
-	// Update the user fields with the provided input and
-	//  increment the version.
+
 	u.Name = input.Name
 	u.Email = input.Email
 	u.Status = input.Status
 	u.UpdatedAt = time.Now().UTC()
-	u.Version++
 
-	s.users[id] = u
+	if err := s.repo.Update(u); err != nil {
+		return nil, err
+	}
+
+	// Evnet user uodated
+	_ = s.pub.Publish(Event{
+		UserID:    u.ID,
+		Email:     u.Email,
+		EventType: "user.updated",
+		Timestamp: u.UpdatedAt,
+	})
+
+	s.log.Info("user updated", "user_id", u.ID)
 	return u, nil
 }
 
-// Delete removes a user by ID from the service.
+// Used to delete user
 func (s *Service) Delete(id string) error {
-	if _, ok := s.users[id]; !ok {
-		return ErrUserNotFound
+	u, err := s.repo.Get(id)
+	if err != nil {
+		return err
 	}
-	delete(s.users, id)
+
+	if err := s.repo.Delete(id); err != nil {
+		return err
+	}
+
+	// event user deleted
+	_ = s.pub.Publish(Event{
+		UserID:    u.ID,
+		Email:     u.Email,
+		EventType: "user.deleted",
+		Timestamp: time.Now().UTC(),
+	})
+
+	s.log.Info("user deleted", "user_id", id)
 	return nil
 }
