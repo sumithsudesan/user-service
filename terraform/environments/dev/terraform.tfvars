@@ -1,0 +1,3 @@
+aws_region  = "eu-west-1"
+environment = "dev"
+# db_password passed via env var: TF_VAR_db_password=... 
