@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    name: Lint and Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: services/go.work
+
+      - name: Vet
+        run: |
+          cd services/user-service        && go vet ./...
+          cd ../notification-service      && go vet ./...
+          cd ../pkg                       && go vet ./...
+
+      - name: Test
+        run: |
+          cd services/user-service        && go test ./...
+          cd ../notification-service      && go test ./...
+          cd ../pkg                       && go test ./...
+
+      - name: Build
+        run: |
+          cd services/user-service        && go build ./...
+          cd ../notification-service      && go build ./...
+
+  docker-lint:
+    name: Docker Build Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build user-service image
+        run: |
+          docker build \
+            -t user-service:ci \
+            -f services/user-service/docker/Dockerfile \
+            services/
+
+      - name: Build notification-service image
+        run: |
+          docker build \
+            -t notification-service:ci \
+            -f services/notification-service/docker/Dockerfile \
+            services/
+
+  helm-lint:
+    name: Helm Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Lint user-service chart
+        run: helm lint ./helm/user-service
+
+      - name: Lint notification-service chart
+        run: helm lint ./helm/notification-service
+
+  terraform-validate:
+    name: Terraform Validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Validate dev
+        working-directory: terraform/environments/dev
+        run: |
+          terraform init -backend=false
+          terraform validate
