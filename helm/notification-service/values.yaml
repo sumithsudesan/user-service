@@ -1,0 +1,56 @@
+replicaCount: 1
+
+image:
+  registry: ""
+  repository: notification-service
+  tag: latest
+  pullPolicy: IfNotPresent
+
+config:
+  service:
+    name: notification-service
+    port: 0
+    env: development
+  log:
+    level: info
+  queue:
+    provider: rabbitmq
+    host: localhost
+    port: 5672
+    user: guest
+    exchange:
+      name: user.events
+      type: topic
+      durable: true
+    queue:
+      name: notification.user.events
+      routing_key: "user.*"
+      durable: true
+    retry:
+      max_attempts: 3
+      interval: 5
+    dlq:
+      enabled: false
+      exchange: ""
+      queue: ""
+
+secrets:
+  queuePassword: ""
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 32Mi
+  limits:
+    cpu: 100m
+    memory: 64Mi
+
+hpa:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilization: 70
+
+pdb:
+  enabled: false
+  minAvailable: 1

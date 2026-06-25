@@ -1,0 +1,6 @@
+apiVersion: v2
+name: notification-service
+description: Event-driven consumer for user domain events
+type: application
+version: 0.1.0
+appVersion: "latest"

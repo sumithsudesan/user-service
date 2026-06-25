@@ -1,0 +1,57 @@
+# ── Go ────────────────────────────────────────────────────────────────────────
+bin/
+dist/
+*.exe
+*.test
+*.out
+vendor/
+
+# ── Terraform ─────────────────────────────────────────────────────────────────
+**/.terraform/
+**/.terraform.lock.hcl
+*.tfstate
+*.tfstate.backup
+*.tfstate.*.backup
+*.tfplan
+*.tfvars.local
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+crash.log
+crash.*.log
+
+# ── Helm ──────────────────────────────────────────────────────────────────────
+*.tgz
+charts/
+**/Chart.lock
+
+# ── Docker ────────────────────────────────────────────────────────────────────
+.dockerignore
+
+# ── Secrets and credentials ───────────────────────────────────────────────────
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+secrets.yaml
+secrets.yml
+**/lbc-policy.json
+
+# ── IDE and OS ────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Test and coverage ─────────────────────────────────────────────────────────
+coverage.out
+coverage.html
