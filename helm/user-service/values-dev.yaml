@@ -1,0 +1,25 @@
+replicaCount: 1
+
+config:
+  service:
+    env: development
+  log:
+    level: debug
+  database:
+    host: ""   # set via: --set config.database.host=$(terraform output -raw rds_endpoint)
+  queue:
+    host: ""   # set via: --set config.queue.host=<rabbitmq-host>
+
+hpa:
+  enabled: false
+
+pdb:
+  enabled: false
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi

@@ -1,0 +1,88 @@
+replicaCount: 1
+
+image:
+  registry: ""
+  repository: user-service
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+ingress:
+  enabled: false
+  className: alb
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+  host: ""
+  tls: false
+
+config:
+  service:
+    name: user-service
+    port: 8080
+    env: development
+  log:
+    level: info
+  database:
+    provider: postgres
+    host: localhost
+    port: 5432
+    name: userdb
+    user: postgres
+  queue:
+    provider: rabbitmq
+    host: localhost
+    port: 5672
+    user: guest
+    exchange:
+      name: user.events
+      type: topic
+      durable: true
+    queue:
+      name: user.events.main
+      routing_key: "user.*"
+      durable: true
+    retry:
+      max_attempts: 3
+      interval: 5
+    dlq:
+      enabled: false
+      exchange: ""
+      queue: ""
+
+secrets:
+  databasePassword: ""
+  queuePassword: ""
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi
+
+hpa:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilization: 70
+
+pdb:
+  enabled: false
+  minAvailable: 1
+
+probes:
+  liveness:
+    path: /health
+    initialDelaySeconds: 10
+    periodSeconds: 15
+  readiness:
+    path: /health
+    initialDelaySeconds: 5
+    periodSeconds: 10

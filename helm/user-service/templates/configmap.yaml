@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "user-service.fullname" . }}-config
+  labels:
+    {{- include "user-service.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    service:
+      name: {{ .Values.config.service.name }}
+      port: {{ .Values.config.service.port }}
+      env: {{ .Values.config.service.env }}
+    log:
+      level: {{ .Values.config.log.level }}
+    database:
+      provider: {{ .Values.config.database.provider }}
+      host: {{ .Values.config.database.host }}
+      port: {{ .Values.config.database.port }}
+      name: {{ .Values.config.database.name }}
+      user: {{ .Values.config.database.user }}
+      password: ""
+    queue:
+      provider: {{ .Values.config.queue.provider }}
+      host: {{ .Values.config.queue.host }}
+      port: {{ .Values.config.queue.port }}
+      user: {{ .Values.config.queue.user }}
+      password: ""
+      exchange:
+        name: {{ .Values.config.queue.exchange.name }}
+        type: {{ .Values.config.queue.exchange.type }}
+        durable: {{ .Values.config.queue.exchange.durable }}
+      queue:
+        name: {{ .Values.config.queue.queue.name }}
+        routing_key: {{ .Values.config.queue.queue.routing_key | quote }}
+        durable: {{ .Values.config.queue.queue.durable }}
+      retry:
+        max_attempts: {{ .Values.config.queue.retry.max_attempts }}
+        interval: {{ .Values.config.queue.retry.interval }}
+      dlq:
+        enabled: {{ .Values.config.queue.dlq.enabled }}
+        exchange: {{ .Values.config.queue.dlq.exchange | quote }}
+        queue: {{ .Values.config.queue.dlq.queue | quote }}

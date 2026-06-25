@@ -1,0 +1,34 @@
+replicaCount: 3
+
+ingress:
+  enabled: true
+  host: api.example.com
+  tls: true
+
+config:
+  service:
+    env: production
+  log:
+    level: info
+  database:
+    host: ""   # set via: --set config.database.host=$(terraform output -raw rds_endpoint)
+  queue:
+    host: ""   # set via: --set config.queue.host=<rabbitmq-host>
+
+hpa:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilization: 70
+
+pdb:
+  enabled: true
+  minAvailable: 2
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 256Mi
+  limits:
+    cpu: 1000m
+    memory: 512Mi
