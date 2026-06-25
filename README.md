@@ -205,7 +205,7 @@ Or trigger manually via GitHub Actions → **Deploy** → Run workflow.
 | Phase 1 | REST API, PostgreSQL, RabbitMQ, Docker, pkg shared library | In progress |
 | Phase 2 | Helm charts, Terraform infrastructure, GitHub Actions CI/CD | In progress |
 | Phase 3 | Redis cache, Prometheus metrics, multi-env Kubernetes deployment | Planned |
-| Phase 4 | OpenTelemetry, distributed tracing, Kafka provider, JWT / OAuth2 auth | Planned |
+| Phase 4 | OpenTelemetry, distributed tracing, JWT / OAuth2 auth | Planned |
 
 ---
 
